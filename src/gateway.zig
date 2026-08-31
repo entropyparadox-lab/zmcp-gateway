@@ -170,6 +170,65 @@ pub const Gateway = struct {
         return self.formatSuccessResponse(allocator, id, res_json);
     }
 
+    const ResolvedRoute = struct {
+        upstream_idx: usize,
+        tool_name: []const u8,
+        namespace: []const u8,
+    };
+
+    fn resolveToolRoute(self: *const Gateway, requested_name: []const u8) ?ResolvedRoute {
+        // 1. Direct match with exact name
+        for (self.upstreams.items, 0..) |up, u_idx| {
+            for (up.tools.items) |t| {
+                if (std.mem.eql(u8, t.name, requested_name)) {
+                    return .{ .upstream_idx = u_idx, .tool_name = t.name, .namespace = up.namespace };
+                }
+            }
+        }
+
+        // Strip optional mcp__ or tool__ prefix if present
+        var name = requested_name;
+        if (std.mem.startsWith(u8, name, "mcp__")) {
+            name = name[5..];
+        } else if (std.mem.startsWith(u8, name, "tool__")) {
+            name = name[6..];
+        }
+
+        // 2. Direct match after prefix strip
+        for (self.upstreams.items, 0..) |up, u_idx| {
+            for (up.tools.items) |t| {
+                if (std.mem.eql(u8, t.name, name)) {
+                    return .{ .upstream_idx = u_idx, .tool_name = t.name, .namespace = up.namespace };
+                }
+            }
+        }
+
+        // 3. Namespaced format: `${namespace}__${tool_name}`
+        if (std.mem.indexOf(u8, name, "__")) |sep_idx| {
+            const ns = name[0..sep_idx];
+            const raw_tool = name[sep_idx + 2 ..];
+
+            for (self.upstreams.items, 0..) |up, u_idx| {
+                if (std.mem.eql(u8, up.namespace, ns)) {
+                    return .{ .upstream_idx = u_idx, .tool_name = raw_tool, .namespace = up.namespace };
+                }
+            }
+        }
+
+        // 4. Dot delimiter format: `${namespace}.${tool_name}`
+        if (std.mem.indexOfScalar(u8, name, '.')) |dot_idx| {
+            const ns = name[0..dot_idx];
+            const raw_tool = name[dot_idx + 1 ..];
+            for (self.upstreams.items, 0..) |up, u_idx| {
+                if (std.mem.eql(u8, up.namespace, ns)) {
+                    return .{ .upstream_idx = u_idx, .tool_name = raw_tool, .namespace = up.namespace };
+                }
+            }
+        }
+
+        return null;
+    }
+
     fn handleToolsCall(self: *Gateway, allocator: Allocator, id: zmcp.RequestId, params_val: ?std.json.Value, traceparent: []const u8) ![]u8 {
         if (params_val == null or params_val.? != .object) {
             return self.formatErrorResponse(allocator, id, .invalid_params, "Expected params object");
@@ -195,55 +254,60 @@ pub const Gateway = struct {
             }
         }
 
-        // 1. Check in-memory cache
-        if (self.cache.get(full_name, args_json_slice)) |cached_resp| {
-            zlog.info("Tool Cache Hit", .{
-                .tool = full_name,
-                .traceparent = traceparent,
-            });
-            return self.formatSuccessResponse(allocator, id, cached_resp);
-        }
-
-        // 2. Parse namespace delimiter '__'
-        const sep_idx = std.mem.indexOf(u8, full_name, "__") orelse {
-            return self.formatErrorResponse(allocator, id, .tool_not_found, "Tool must be in format namespace__tool_name");
+        // 1. Resolve Route
+        const route = self.resolveToolRoute(full_name) orelse {
+            return self.formatErrorResponse(allocator, id, .tool_not_found, "Tool not found in any registered upstream");
         };
 
-        const namespace = full_name[0..sep_idx];
-        const raw_tool_name = full_name[sep_idx + 2 ..];
+        const is_cacheable = cache_mod.ToolCache.isCacheableTool(route.tool_name);
 
-        // 3. Dispatch to matching upstream
-        for (self.upstreams.items) |*up| {
-            if (std.mem.eql(u8, up.namespace, namespace)) {
-                const res = up.call(allocator, raw_tool_name, args_json_slice) catch |err| {
-                    var err_buf: [256]u8 = undefined;
-                    const err_msg = try std.fmt.bufPrint(&err_buf, "Upstream error: {s}", .{@errorName(err)});
-                    zlog.err("Upstream Execution Failed", .{
-                        .namespace = namespace,
-                        .tool = raw_tool_name,
-                        .error_name = @errorName(err),
-                        .traceparent = traceparent,
-                    });
-                    return self.formatErrorResponse(allocator, id, .internal_error, err_msg);
-                };
-
-                const tool_res_json = try self.formatToolCallResultJson(allocator, res);
-                defer allocator.free(tool_res_json);
-
-                // Save to cache
-                try self.cache.put(full_name, args_json_slice, tool_res_json);
-
-                zlog.info("Tool Executed Successfully", .{
+        // 2. Check in-memory cache for idempotent read queries ONLY
+        if (is_cacheable) {
+            if (self.cache.get(full_name, args_json_slice)) |cached_resp| {
+                zlog.info("Tool Cache Hit", .{
                     .tool = full_name,
-                    .is_error = res.isError,
+                    .namespace = route.namespace,
                     .traceparent = traceparent,
                 });
-
-                return self.formatSuccessResponse(allocator, id, tool_res_json);
+                return self.formatSuccessResponse(allocator, id, cached_resp);
             }
         }
 
-        return self.formatErrorResponse(allocator, id, .tool_not_found, "Upstream namespace not found");
+        // 3. Dispatch to upstream
+        var up = &self.upstreams.items[route.upstream_idx];
+        const res = up.call(allocator, route.tool_name, args_json_slice) catch |err| {
+            var err_buf: [256]u8 = undefined;
+            const err_msg = try std.fmt.bufPrint(&err_buf, "Upstream execution error: {s}", .{@errorName(err)});
+            zlog.err("Upstream Execution Failed", .{
+                .namespace = route.namespace,
+                .tool = route.tool_name,
+                .error_name = @errorName(err),
+                .traceparent = traceparent,
+            });
+            return self.formatErrorResponse(allocator, id, .internal_error, err_msg);
+        };
+
+        const tool_res_json = try self.formatToolCallResultJson(allocator, res);
+        defer allocator.free(tool_res_json);
+
+        // 4. Cache Management:
+        if (is_cacheable and !res.isError) {
+            // Put in cache
+            try self.cache.put(route.namespace, full_name, args_json_slice, tool_res_json);
+        } else if (!is_cacheable and !res.isError) {
+            // Mutation succeeded -> Invalidate stale read caches for this namespace!
+            self.cache.invalidateNamespace(route.namespace);
+        }
+
+        zlog.info("Tool Executed", .{
+            .tool = full_name,
+            .namespace = route.namespace,
+            .is_mutation = !is_cacheable,
+            .is_error = res.isError,
+            .traceparent = traceparent,
+        });
+
+        return self.formatSuccessResponse(allocator, id, tool_res_json);
     }
 
     fn formatToolCallResultJson(self: *Gateway, allocator: Allocator, result: zmcp.CallToolResult) ![]u8 {

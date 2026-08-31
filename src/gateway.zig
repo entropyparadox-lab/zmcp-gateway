@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const zmcp = @import("zmcp");
 const zlog = @import("zlog");
 const config_mod = @import("config.zig");
+const cache_mod = @import("cache.zig");
 const upstream_mod = @import("upstream.zig");
 
 pub const BufferWriter = struct {
@@ -27,12 +28,14 @@ pub const BufferWriter = struct {
 pub const Gateway = struct {
     allocator: Allocator,
     config: config_mod.GatewayConfig,
+    cache: cache_mod.ToolCache,
     upstreams: std.ArrayList(upstream_mod.Upstream),
 
     pub fn init(allocator: Allocator, config: config_mod.GatewayConfig) Gateway {
         return .{
             .allocator = allocator,
             .config = config,
+            .cache = cache_mod.ToolCache.init(allocator),
             .upstreams = .empty,
         };
     }
@@ -42,6 +45,7 @@ pub const Gateway = struct {
             up.deinit(self.allocator);
         }
         self.upstreams.deinit(self.allocator);
+        self.cache.deinit();
     }
 
     pub fn registerUpstream(self: *Gateway, upstream: upstream_mod.Upstream) !void {
@@ -170,6 +174,7 @@ pub const Gateway = struct {
         upstream_idx: usize,
         tool_name: []const u8,
         namespace: []const u8,
+        cache_ttl_sec: u32,
     };
 
     fn resolveToolRoute(self: *const Gateway, requested_name: []const u8) ?ResolvedRoute {
@@ -177,7 +182,12 @@ pub const Gateway = struct {
         for (self.upstreams.items, 0..) |up, u_idx| {
             for (up.tools.items) |t| {
                 if (std.mem.eql(u8, t.name, requested_name)) {
-                    return .{ .upstream_idx = u_idx, .tool_name = t.name, .namespace = up.namespace };
+                    return .{
+                        .upstream_idx = u_idx,
+                        .tool_name = t.name,
+                        .namespace = up.namespace,
+                        .cache_ttl_sec = t.cache_ttl_sec,
+                    };
                 }
             }
         }
@@ -194,7 +204,12 @@ pub const Gateway = struct {
         for (self.upstreams.items, 0..) |up, u_idx| {
             for (up.tools.items) |t| {
                 if (std.mem.eql(u8, t.name, name)) {
-                    return .{ .upstream_idx = u_idx, .tool_name = t.name, .namespace = up.namespace };
+                    return .{
+                        .upstream_idx = u_idx,
+                        .tool_name = t.name,
+                        .namespace = up.namespace,
+                        .cache_ttl_sec = t.cache_ttl_sec,
+                    };
                 }
             }
         }
@@ -206,7 +221,16 @@ pub const Gateway = struct {
 
             for (self.upstreams.items, 0..) |up, u_idx| {
                 if (std.mem.eql(u8, up.namespace, ns)) {
-                    return .{ .upstream_idx = u_idx, .tool_name = raw_tool, .namespace = up.namespace };
+                    for (up.tools.items) |t| {
+                        if (std.mem.eql(u8, t.name, raw_tool)) {
+                            return .{
+                                .upstream_idx = u_idx,
+                                .tool_name = raw_tool,
+                                .namespace = up.namespace,
+                                .cache_ttl_sec = t.cache_ttl_sec,
+                            };
+                        }
+                    }
                 }
             }
         }
@@ -217,7 +241,16 @@ pub const Gateway = struct {
             const raw_tool = name[dot_idx + 1 ..];
             for (self.upstreams.items, 0..) |up, u_idx| {
                 if (std.mem.eql(u8, up.namespace, ns)) {
-                    return .{ .upstream_idx = u_idx, .tool_name = raw_tool, .namespace = up.namespace };
+                    for (up.tools.items) |t| {
+                        if (std.mem.eql(u8, t.name, raw_tool)) {
+                            return .{
+                                .upstream_idx = u_idx,
+                                .tool_name = raw_tool,
+                                .namespace = up.namespace,
+                                .cache_ttl_sec = t.cache_ttl_sec,
+                            };
+                        }
+                    }
                 }
             }
         }
@@ -250,12 +283,25 @@ pub const Gateway = struct {
             }
         }
 
-        // 1. Resolve Route (100% Transparent Pass-Through, Zero-Cache)
+        // 1. Resolve Route
         const route = self.resolveToolRoute(full_name) orelse {
             return self.formatErrorResponse(allocator, id, .tool_not_found, "Tool not found in any registered upstream");
         };
 
-        // 2. Dispatch directly to upstream
+        // 2. Check Opt-In Cache (ONLY if author explicitly configured cache_ttl_sec > 0)
+        if (route.cache_ttl_sec > 0) {
+            if (self.cache.get(full_name, args_json_slice)) |cached_resp| {
+                zlog.info("Tool Opt-In Cache Hit", .{
+                    .tool = full_name,
+                    .namespace = route.namespace,
+                    .ttl = route.cache_ttl_sec,
+                    .traceparent = traceparent,
+                });
+                return self.formatSuccessResponse(allocator, id, cached_resp);
+            }
+        }
+
+        // 3. Dispatch to upstream
         var up = &self.upstreams.items[route.upstream_idx];
         const res = up.call(allocator, route.tool_name, args_json_slice) catch |err| {
             var err_buf: [256]u8 = undefined;
@@ -272,10 +318,16 @@ pub const Gateway = struct {
         const tool_res_json = try self.formatToolCallResultJson(allocator, res);
         defer allocator.free(tool_res_json);
 
+        // 4. Save to cache ONLY if author explicitly configured cache_ttl_sec > 0 and call succeeded
+        if (route.cache_ttl_sec > 0 and !res.isError) {
+            try self.cache.put(full_name, args_json_slice, tool_res_json, route.cache_ttl_sec);
+        }
+
         zlog.info("Tool Executed", .{
             .tool = full_name,
             .namespace = route.namespace,
             .is_error = res.isError,
+            .cache_ttl = route.cache_ttl_sec,
             .traceparent = traceparent,
         });
 

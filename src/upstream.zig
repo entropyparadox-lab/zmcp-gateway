@@ -6,34 +6,33 @@ pub const UpstreamTool = struct {
     name: []const u8,
     description: []const u8,
     schema_json: []const u8,
+    cache_ttl_sec: u32 = 0, // 0 = Pure Pass-Through (Default / Safe), >0 = Explicit Opt-In Cache
 };
+
+pub const UpstreamHandler = *const fn (ctx: *anyopaque, allocator: Allocator, tool_name: []const u8, args_json: []const u8) anyerror!zmcp.CallToolResult;
 
 pub const Upstream = struct {
     namespace: []const u8,
-    tools: std.ArrayList(UpstreamTool),
-    handler_fn: *const fn (ctx: *anyopaque, alloc: Allocator, tool_name: []const u8, args_json: []const u8) anyerror!zmcp.CallToolResult,
     ctx: *anyopaque,
+    handler_fn: UpstreamHandler,
+    tools: std.ArrayList(UpstreamTool),
 
-    pub fn init(
-        allocator: Allocator,
-        namespace: []const u8,
-        ctx: *anyopaque,
-        handler_fn: *const fn (ctx: *anyopaque, alloc: Allocator, tool_name: []const u8, args_json: []const u8) anyerror!zmcp.CallToolResult,
-    ) Upstream {
+    pub fn init(allocator: Allocator, namespace: []const u8, ctx: *anyopaque, handler: UpstreamHandler) Upstream {
+        _ = allocator;
         return .{
             .namespace = namespace,
-            .tools = std.ArrayList(UpstreamTool).initCapacity(allocator, 0) catch .empty,
-            .handler_fn = handler_fn,
             .ctx = ctx,
+            .handler_fn = handler,
+            .tools = .empty,
         };
-    }
-
-    pub fn addTool(self: *Upstream, allocator: Allocator, tool: UpstreamTool) !void {
-        try self.tools.append(allocator, tool);
     }
 
     pub fn deinit(self: *Upstream, allocator: Allocator) void {
         self.tools.deinit(allocator);
+    }
+
+    pub fn addTool(self: *Upstream, allocator: Allocator, tool: UpstreamTool) !void {
+        try self.tools.append(allocator, tool);
     }
 
     pub fn call(self: *Upstream, allocator: Allocator, tool_name: []const u8, args_json: []const u8) !zmcp.CallToolResult {

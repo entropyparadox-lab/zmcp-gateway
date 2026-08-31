@@ -1,0 +1,70 @@
+name: CI & Quality Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-format:
+    name: Code Style & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Check Formatting
+        run: zig fmt --check src/ build.zig
+
+      - name: Verify Version Consistency
+        run: |
+          ZON_VER=$(grep -oP '\.version\s*=\s*"\K[^"]+' build.zig.zon)
+          echo "build.zig.zon version: $ZON_VER"
+          if [ -z "$ZON_VER" ]; then
+            echo "Error: Version not found in build.zig.zon"
+            exit 1
+          fi
+
+  test-matrix:
+    name: Test on ${{ matrix.os }}
+    needs: lint-and-format
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Clone Sibling Dependencies
+        run: |
+          cd ..
+          git clone --depth 1 https://github.com/entropyparadox-lab/zcli.git
+          git clone --depth 1 https://github.com/entropyparadox-lab/zserde.git
+          git clone --depth 1 https://github.com/entropyparadox-lab/zmcp.git
+          git clone --depth 1 https://github.com/entropyparadox-lab/zbench.git
+          git clone --depth 1 https://github.com/entropyparadox-lab/zfetch.git
+          git clone --depth 1 https://github.com/entropyparadox-lab/zenv.git
+          git clone --depth 1 https://github.com/entropyparadox-lab/zlog.git
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Run Unit Tests
+        run: zig build test
+
+      - name: Run Gateway Binary Build
+        run: zig build -Doptimize=ReleaseFast

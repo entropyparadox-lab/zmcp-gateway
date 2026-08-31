@@ -13,8 +13,8 @@ const CliOptions = struct {
 
     pub const zcli = .{
         .name = "zmcp-gateway",
-        .version = "1.0.0",
-        .description = "Zero-Allocation Native MCP Multiplexer & Tool Hub",
+        .version = "1.1.0",
+        .description = "Zero-Allocation Native Transparent MCP Multiplexer & Tool Hub",
         .short = .{
             .config_file = 'c',
             .port = 'p',
@@ -62,8 +62,7 @@ pub fn main(init: std.process.Init) !void {
     zlog.info("Starting zmcp-gateway", .{
         .name = config.name,
         .version = config.version,
-        .cache_enabled = config.cache_enabled,
-        .cache_ttl = config.cache_ttl_sec,
+        .port = config.port,
     });
 
     var gw = gateway_lib.Gateway.init(allocator, config);
@@ -76,7 +75,7 @@ pub fn main(init: std.process.Init) !void {
             _ = alloc;
             _ = args_json;
             if (std.mem.eql(u8, tool_name, "status")) {
-                return zmcp.CallToolResult.text("zmcp-gateway OK (Pure Zig 0.16.0+, Zero-Alloc Multiplexer)");
+                return zmcp.CallToolResult.text("zmcp-gateway OK (Pure Zig 0.16.0+, Zero-Alloc Transparent Multiplexer)");
             } else if (std.mem.eql(u8, tool_name, "ping")) {
                 return zmcp.CallToolResult.text("pong");
             }

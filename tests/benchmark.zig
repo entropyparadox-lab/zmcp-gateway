@@ -20,9 +20,7 @@ pub fn main(init: std.process.Init) !void {
 
     bench_gw = gateway_lib.Gateway.init(bench_alloc, .{
         .name = "bench-gw",
-        .version = "1.0.0",
-        .cache_enabled = true,
-        .cache_ttl_sec = 60,
+        .version = "1.1.0",
     });
     defer bench_gw.deinit();
 
@@ -47,7 +45,7 @@ pub fn main(init: std.process.Init) !void {
     var suite = zbench.BenchmarkSuite.init(bench_alloc);
     defer suite.deinit();
 
-    try suite.add("Gateway Multiplex & Cache", benchRouting, .{
+    try suite.add("Gateway Direct Multiplexing", benchRouting, .{
         .warmup_ms = 100,
         .sample_count = 50,
     });

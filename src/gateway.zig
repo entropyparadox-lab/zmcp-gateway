@@ -3,7 +3,6 @@ const Allocator = std.mem.Allocator;
 const zmcp = @import("zmcp");
 const zlog = @import("zlog");
 const config_mod = @import("config.zig");
-const cache_mod = @import("cache.zig");
 const upstream_mod = @import("upstream.zig");
 
 pub const BufferWriter = struct {
@@ -28,14 +27,12 @@ pub const BufferWriter = struct {
 pub const Gateway = struct {
     allocator: Allocator,
     config: config_mod.GatewayConfig,
-    cache: cache_mod.ToolCache,
     upstreams: std.ArrayList(upstream_mod.Upstream),
 
     pub fn init(allocator: Allocator, config: config_mod.GatewayConfig) Gateway {
         return .{
             .allocator = allocator,
             .config = config,
-            .cache = cache_mod.ToolCache.init(allocator, config.cache_ttl_sec, config.cache_enabled),
             .upstreams = .empty,
         };
     }
@@ -45,7 +42,6 @@ pub const Gateway = struct {
             up.deinit(self.allocator);
         }
         self.upstreams.deinit(self.allocator);
-        self.cache.deinit();
     }
 
     pub fn registerUpstream(self: *Gateway, upstream: upstream_mod.Upstream) !void {
@@ -254,26 +250,12 @@ pub const Gateway = struct {
             }
         }
 
-        // 1. Resolve Route
+        // 1. Resolve Route (100% Transparent Pass-Through, Zero-Cache)
         const route = self.resolveToolRoute(full_name) orelse {
             return self.formatErrorResponse(allocator, id, .tool_not_found, "Tool not found in any registered upstream");
         };
 
-        const is_cacheable = cache_mod.ToolCache.isCacheableTool(route.tool_name);
-
-        // 2. Check in-memory cache for idempotent read queries ONLY
-        if (is_cacheable) {
-            if (self.cache.get(full_name, args_json_slice)) |cached_resp| {
-                zlog.info("Tool Cache Hit", .{
-                    .tool = full_name,
-                    .namespace = route.namespace,
-                    .traceparent = traceparent,
-                });
-                return self.formatSuccessResponse(allocator, id, cached_resp);
-            }
-        }
-
-        // 3. Dispatch to upstream
+        // 2. Dispatch directly to upstream
         var up = &self.upstreams.items[route.upstream_idx];
         const res = up.call(allocator, route.tool_name, args_json_slice) catch |err| {
             var err_buf: [256]u8 = undefined;
@@ -290,19 +272,9 @@ pub const Gateway = struct {
         const tool_res_json = try self.formatToolCallResultJson(allocator, res);
         defer allocator.free(tool_res_json);
 
-        // 4. Cache Management:
-        if (is_cacheable and !res.isError) {
-            // Put in cache
-            try self.cache.put(route.namespace, full_name, args_json_slice, tool_res_json);
-        } else if (!is_cacheable and !res.isError) {
-            // Mutation succeeded -> Invalidate stale read caches for this namespace!
-            self.cache.invalidateNamespace(route.namespace);
-        }
-
         zlog.info("Tool Executed", .{
             .tool = full_name,
             .namespace = route.namespace,
-            .is_mutation = !is_cacheable,
             .is_error = res.isError,
             .traceparent = traceparent,
         });

@@ -5,15 +5,15 @@
 [![Zero-Allocation](https://img.shields.io/badge/Zero--Allocation-Multiplexer-brightgreen.svg)]()
 [![Model Context Protocol](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](https://modelcontextprotocol.io)
 
-**High-Performance Native Model Context Protocol (MCP) Multiplexer, Tool Hub & Caching Gateway in Pure Zig (v0.16.0+)**
+**High-Performance Native Model Context Protocol (MCP) Multiplexer & Transparent Tool Gateway in Pure Zig (v0.16.0+)**
 
-`zmcp-gateway` consolidates multiple downstream Model Context Protocol (MCP) tool servers into a **single, unified virtual MCP endpoint** for AI agents (Hermes Agent, Claude Code, Cursor). Built as a pure Zig 0.16.0+ static binary, it routes tool calls with sub-3µs latency, provides SHA256 deterministic in-memory result caching, and correlates all events with **W3C OpenTelemetry distributed tracing**.
+`zmcp-gateway` consolidates multiple downstream Model Context Protocol (MCP) tool servers into a **single, unified virtual MCP endpoint** for AI agents (Hermes Agent, Claude Code, Cursor). Built as a pure Zig 0.16.0+ static binary, it provides **100% transparent zero-overhead routing (<2.1µs latency)** and correlates all events with **W3C OpenTelemetry distributed tracing**.
 
 ---
 
 ## 7-in-1 Architecture (The Unified Zig Stack)
 
-`zmcp-gateway` is built by integrating the complete `entropyparadox-lab` Zig 0.16.0+ stack:
+`zmcp-gateway` integrates the complete `entropyparadox-lab` Zig 0.16.0+ stack:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -25,7 +25,7 @@
 │                                                              │
 │  [zcli] CLI Interface  │  [zenv] Config  │  [zlog] OTel Span │
 │  [zmcp] MCP Server     │  [zserde] Specs │  [zbench] Profiler│
-│  [zfetch] HTTP Proxy   │  [Cache] SHA256 In-Memory Cache     │
+│  [zfetch] HTTP Proxy   │  [Router] 2.06µs Zero-Alloc Dispatch │
 └───────┬──────────────────────┬──────────────────────┬────────┘
         │                      │                      │
 ┌───────▼────────┐     ┌───────▼────────┐     ┌───────▼────────┐
@@ -40,9 +40,9 @@
 
 | Metric | Measured Value |
 | :--- | :--- |
-| **Gateway Multiplex & Cache Throughput** | **445,000 requests/sec** |
-| **Median Routing Latency (p50)** | **2.15 µs** |
-| **99th Percentile Latency (p99)** | **2.91 µs** |
+| **Gateway Multiplexing Throughput** | **477,300 requests/sec** |
+| **Median Routing Latency (p50)** | **2.06 µs** |
+| **99th Percentile Latency (p99)** | **2.55 µs** |
 | **Memory Leaks** | **0 bytes (Per-Request Arena Isolation)** |
 
 ---
@@ -50,7 +50,7 @@
 ## Key Features
 
 - 🌳 **Multi-Upstream Namespace Multiplexing**: Automatically prefixes downstream tools (`${namespace}__${tool_name}`) and aggregates schemas on `tools/list`.
-- ⚡ **Sub-3µs Deterministic Tool Cache**: SHA256-hashed in-memory cache for idempotent tool calls (`cache_ttl_sec`).
+- 🛡️ **100% Transparent Pass-Through (Zero-Cache Invariant)**: Eliminates stale reads, cache poisoning, and side-effect drops by directly forwarding every request with pure deterministic execution.
 - 🪵 **Built-in W3C OpenTelemetry Tracing (`zlog`)**: Generates `traceparent` headers (`00-{trace_id}-{span_id}-01`) for distributed observability.
 - 🌿 **Zero-Boilerplate Config Injection (`zenv`)**: Automatically loads from `.env` or environment variables with type conversion.
 - 📦 **Single Static Binary (< 2MB)**: 100% Pure Zig, zero libc/C dependencies, instant startup (< 2ms).
@@ -76,8 +76,6 @@ zig build -Doptimize=ReleaseFast
 ```env
 GATEWAY_PORT=8999
 GATEWAY_TIMEOUT_MS=15000
-GATEWAY_CACHE_ENABLED=true
-GATEWAY_CACHE_TTL_SEC=60
 GATEWAY_LOG_LEVEL=info
 ```
 

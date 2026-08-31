@@ -32,6 +32,19 @@ const CliOptions = struct {
     };
 };
 
+fn writeAllFd(fd: i32, bytes: []const u8) !void {
+    var written: usize = 0;
+    while (written < bytes.len) {
+        const n_signed = std.posix.system.write(fd, bytes.ptr + written, bytes.len - written);
+        if (@as(isize, @bitCast(n_signed)) < 0) {
+            return error.WriteFailed;
+        }
+        const n: usize = @intCast(n_signed);
+        if (n == 0) break;
+        written += n;
+    }
+}
+
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
 
@@ -120,8 +133,8 @@ pub fn main(init: std.process.Init) !void {
                     const req_alloc = req_arena.allocator();
 
                     if (try gw.handleMessage(req_alloc, line)) |resp| {
-                        _ = std.posix.system.write(stdout_fd, resp.ptr, resp.len);
-                        _ = std.posix.system.write(stdout_fd, "\n", 1);
+                        try writeAllFd(stdout_fd, resp);
+                        try writeAllFd(stdout_fd, "\n");
                     }
                 }
                 line_buf.clearRetainingCapacity();

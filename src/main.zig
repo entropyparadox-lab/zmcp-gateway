@@ -57,7 +57,16 @@ pub fn main(init: std.process.Init) !void {
         try args_list.append(allocator, std.mem.sliceTo(arg, 0));
     }
 
-    const cli = zcli.parse(CliOptions, args_list.items) catch {
+    const cli_args = if (args_list.items.len > 1) args_list.items[1..] else &[_][]const u8{};
+
+    const cli = zcli.parse(CliOptions, cli_args) catch |err| {
+        if (err == error.HelpRequested) {
+            var help_buf: [4096]u8 = undefined;
+            var w = zcli.help.BufferWriter.init(&help_buf);
+            zcli.formatHelp(CliOptions, &w, .{}) catch {};
+            _ = std.posix.system.write(std.posix.STDOUT_FILENO, w.getWritten().ptr, w.getWritten().len);
+            std.process.exit(0);
+        }
         std.process.exit(1);
     };
 

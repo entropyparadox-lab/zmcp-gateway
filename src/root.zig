@@ -86,4 +86,5 @@ test {
     _ = cache;
     _ = upstream;
     _ = gateway;
+    _ = @import("edge_cases.zig");
 }

@@ -178,20 +178,6 @@ pub const Gateway = struct {
     };
 
     fn resolveToolRoute(self: *const Gateway, requested_name: []const u8) ?ResolvedRoute {
-        // 1. Direct match with exact name
-        for (self.upstreams.items, 0..) |up, u_idx| {
-            for (up.tools.items) |t| {
-                if (std.mem.eql(u8, t.name, requested_name)) {
-                    return .{
-                        .upstream_idx = u_idx,
-                        .tool_name = t.name,
-                        .namespace = up.namespace,
-                        .cache_ttl_sec = t.cache_ttl_sec,
-                    };
-                }
-            }
-        }
-
         // Strip optional mcp__ or tool__ prefix if present
         var name = requested_name;
         if (std.mem.startsWith(u8, name, "mcp__")) {
@@ -200,21 +186,7 @@ pub const Gateway = struct {
             name = name[6..];
         }
 
-        // 2. Direct match after prefix strip
-        for (self.upstreams.items, 0..) |up, u_idx| {
-            for (up.tools.items) |t| {
-                if (std.mem.eql(u8, t.name, name)) {
-                    return .{
-                        .upstream_idx = u_idx,
-                        .tool_name = t.name,
-                        .namespace = up.namespace,
-                        .cache_ttl_sec = t.cache_ttl_sec,
-                    };
-                }
-            }
-        }
-
-        // 3. Namespaced format: `${namespace}__${tool_name}`
+        // 1. Fast-Path: Namespaced format `${namespace}__${tool_name}` (most common in MCP gateway)
         if (std.mem.indexOf(u8, name, "__")) |sep_idx| {
             const ns = name[0..sep_idx];
             const raw_tool = name[sep_idx + 2 ..];
@@ -235,7 +207,21 @@ pub const Gateway = struct {
             }
         }
 
-        // 4. Dot delimiter format: `${namespace}.${tool_name}`
+        // 2. Direct match with exact name or stripped name
+        for (self.upstreams.items, 0..) |up, u_idx| {
+            for (up.tools.items) |t| {
+                if (std.mem.eql(u8, t.name, requested_name) or std.mem.eql(u8, t.name, name)) {
+                    return .{
+                        .upstream_idx = u_idx,
+                        .tool_name = t.name,
+                        .namespace = up.namespace,
+                        .cache_ttl_sec = t.cache_ttl_sec,
+                    };
+                }
+            }
+        }
+
+        // 3. Dot delimiter format: `${namespace}.${tool_name}`
         if (std.mem.indexOfScalar(u8, name, '.')) |dot_idx| {
             const ns = name[0..dot_idx];
             const raw_tool = name[dot_idx + 1 ..];
@@ -339,6 +325,9 @@ pub const Gateway = struct {
         var buf: std.ArrayList(u8) = .empty;
         errdefer buf.deinit(allocator);
 
+        const est_len: usize = 64 + if (result.text_content) |t| t.len + 32 else 0;
+        try buf.ensureTotalCapacity(allocator, est_len);
+
         var writer = BufferWriter{ .list = &buf, .allocator = allocator };
         try writer.writeAll("{\"content\":[");
 
@@ -356,6 +345,8 @@ pub const Gateway = struct {
         _ = self;
         var buf: std.ArrayList(u8) = .empty;
         errdefer buf.deinit(allocator);
+
+        try buf.ensureTotalCapacity(allocator, 64 + result_json.len);
 
         var writer = BufferWriter{ .list = &buf, .allocator = allocator };
         try writer.writeAll("{\"jsonrpc\":\"2.0\",\"id\":");

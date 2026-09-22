@@ -97,7 +97,7 @@ pub fn main(init: std.process.Init) !void {
             _ = alloc;
             _ = args_json;
             if (std.mem.eql(u8, tool_name, "status")) {
-                return zmcp.CallToolResult.text("zmcp-gateway OK (Pure Zig 0.16.0+, Zero-Alloc Transparent Multiplexer)");
+                return zmcp.CallToolResult.text("zmcp-gateway OK (Pure Zig 0.17.0-dev, Zero-Alloc Transparent Multiplexer)");
             } else if (std.mem.eql(u8, tool_name, "ping")) {
                 return zmcp.CallToolResult.text("pong");
             }
@@ -126,6 +126,9 @@ pub fn main(init: std.process.Init) !void {
     var line_buf: std.ArrayList(u8) = .empty;
     defer line_buf.deinit(allocator);
 
+    var req_arena = std.heap.ArenaAllocator.init(allocator);
+    defer req_arena.deinit();
+
     while (true) {
         const bytes_read = std.posix.read(stdin_fd, &read_buf) catch |err| {
             if (err == error.WouldBlock) continue;
@@ -137,8 +140,7 @@ pub fn main(init: std.process.Init) !void {
             if (byte == '\n') {
                 const line = std.mem.trim(u8, line_buf.items, " \r\t");
                 if (line.len > 0) {
-                    var req_arena = std.heap.ArenaAllocator.init(allocator);
-                    defer req_arena.deinit();
+                    _ = req_arena.reset(.retain_capacity);
                     const req_alloc = req_arena.allocator();
 
                     if (try gw.handleMessage(req_alloc, line)) |resp| {

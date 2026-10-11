@@ -79,9 +79,7 @@ pub fn build(b: *std.Build) void {
     // 3. Run Step
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
     const run_step = b.step("run", "Run zmcp-gateway");
     run_step.dependOn(&run_cmd.step);
 

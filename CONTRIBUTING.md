@@ -6,7 +6,7 @@ Thank you for contributing to `zmcp-gateway`! To maintain high throughput, low l
 
 ## 1. Compiler Versioning & Branch Strategy
 
-* **`main` (Protected)**: Targets **Official Stable Zig (`0.16.x`)**. All production releases (`vX.Y.Z`) are cut exclusively from `main`.
+* **`main` (Protected)**: Targets the unreleased Zig snapshot **`0.17.0-dev.2085+5e36170b5`**. All production releases (`vX.Y.Z`) are cut exclusively from `main`.
 * **`zig-master`**: Tracks upstream `ziglang/zig` nightly builds.
 * **`feat/<name>` / `fix/<name>`**: Branch off `main` for stable changes.
 

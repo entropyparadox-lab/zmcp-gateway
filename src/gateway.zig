@@ -366,7 +366,7 @@ pub const Gateway = struct {
         var writer = BufferWriter{ .list = &buf, .allocator = allocator };
         try writer.writeAll("{\"jsonrpc\":\"2.0\",\"id\":");
         try id.format(&writer);
-        try writer.print(",\"error\":{{\"code\":{d},\"message\":\"", .{@intFromEnum(code)});
+        try writer.print(",\"error\":{{\"code\":{d},\"message\":\"", .{@backingInt(code)});
         try zmcp.protocol.writeJsonEscaped(&writer, message);
         try writer.writeAll("\"}}");
 

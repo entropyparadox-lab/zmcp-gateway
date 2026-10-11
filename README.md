@@ -1,19 +1,19 @@
 # zmcp-gateway ⚡
 
-[![Zig Version](https://img.shields.io/badge/Zig-0.16.0%2B-orange.svg)](https://ziglang.org)
+[![Zig Version](https://img.shields.io/badge/Zig-0.17.0%2B-orange.svg)](https://ziglang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Zero-Allocation](https://img.shields.io/badge/Zero--Allocation-Multiplexer-brightgreen.svg)]()
 [![Model Context Protocol](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](https://modelcontextprotocol.io)
 
-**High-Performance Native Model Context Protocol (MCP) Multiplexer & Transparent Tool Gateway in Pure Zig (v0.16.0+)**
+**High-Performance Native Model Context Protocol (MCP) Multiplexer & Transparent Tool Gateway in Pure Zig (v0.17.0+)**
 
-`zmcp-gateway` consolidates multiple downstream Model Context Protocol (MCP) tool servers into a **single, unified virtual MCP endpoint** for AI agents (Hermes Agent, Claude Code, Cursor). Built as a pure Zig 0.16.0+ static binary, it provides **100% transparent zero-overhead routing (<2.1µs latency)** and correlates all events with **W3C OpenTelemetry distributed tracing**.
+`zmcp-gateway` consolidates multiple downstream Model Context Protocol (MCP) tool servers into a **single, unified virtual MCP endpoint** for AI agents (Hermes Agent, Claude Code, Cursor). Built as a pure Zig 0.17.0+ static binary, it provides **100% transparent zero-overhead routing (<2.1µs latency)** and correlates all events with **W3C OpenTelemetry distributed tracing**.
 
 ---
 
 ## 7-in-1 Architecture (The Unified Zig Stack)
 
-`zmcp-gateway` integrates the complete `entropyparadox-lab` Zig 0.16.0+ stack:
+`zmcp-gateway` integrates the complete `entropyparadox-lab` Zig 0.17.0+ stack:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐

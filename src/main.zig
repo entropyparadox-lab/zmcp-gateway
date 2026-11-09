@@ -13,7 +13,7 @@ const CliOptions = struct {
 
     pub const zcli = .{
         .name = "zmcp-gateway",
-        .version = "1.1.0",
+        .version = "1.3.1",
         .description = "Zero-Allocation Native Transparent MCP Multiplexer & Tool Hub",
         .short = .{
             .config_file = 'c',
@@ -97,7 +97,7 @@ pub fn main(init: std.process.Init) !void {
             _ = alloc;
             _ = args_json;
             if (std.mem.eql(u8, tool_name, "status")) {
-                return zmcp.CallToolResult.text("zmcp-gateway OK (Pure Zig 0.17.0-dev, Zero-Alloc Transparent Multiplexer)");
+                return zmcp.CallToolResult.text("zmcp-gateway OK (Pure Zig 0.17.1, Zero-Alloc Transparent Multiplexer)");
             } else if (std.mem.eql(u8, tool_name, "ping")) {
                 return zmcp.CallToolResult.text("pong");
             }

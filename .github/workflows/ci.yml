@@ -21,10 +21,10 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
 
       - name: Check Formatting
-        run: zig fmt --check src/ build.zig
+        run: zig fmt --check src/ tests/ build.zig build.zig.zon
 
       - name: Verify Version Consistency
         run: |
@@ -47,24 +47,25 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Clone Sibling Dependencies
-        run: |
-          cd ..
-          git clone --depth 1 https://github.com/entropyparadox-lab/zcli.git
-          git clone --depth 1 https://github.com/entropyparadox-lab/zserde.git
-          git clone --depth 1 https://github.com/entropyparadox-lab/zmcp.git
-          git clone --depth 1 https://github.com/entropyparadox-lab/zbench.git
-          git clone --depth 1 https://github.com/entropyparadox-lab/zfetch.git
-          git clone --depth 1 https://github.com/entropyparadox-lab/zenv.git
-          git clone --depth 1 https://github.com/entropyparadox-lab/zlog.git
-
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
 
       - name: Run Unit Tests
         run: zig build test
 
       - name: Run Gateway Binary Build
         run: zig build -Doptimize=ReleaseFast
+
+      - name: Bounded stdio MCP smoke
+        run: python3 tests/stdio_smoke.py zig-out/bin/zmcp-gateway
+
+      - name: Standalone archive build (no sibling clones)
+        run: |
+          mkdir -p "$RUNNER_TEMP/gateway-archive"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/gateway-archive"
+          cd "$RUNNER_TEMP/gateway-archive"
+          zig build test
+          zig build -Doptimize=ReleaseFast
+          python3 tests/stdio_smoke.py zig-out/bin/zmcp-gateway

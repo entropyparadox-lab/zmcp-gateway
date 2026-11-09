@@ -1,19 +1,19 @@
 # zmcp-gateway ⚡
 
-[![Zig Version](https://img.shields.io/badge/Zig-0.17.0%2B-orange.svg)](https://ziglang.org)
+[![Zig Version](https://img.shields.io/badge/Zig-0.17.1-orange.svg)](https://ziglang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Zero-Allocation](https://img.shields.io/badge/Zero--Allocation-Multiplexer-brightgreen.svg)]()
 [![Model Context Protocol](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](https://modelcontextprotocol.io)
 
-**High-Performance Native Model Context Protocol (MCP) Multiplexer & Transparent Tool Gateway in Pure Zig (v0.17.0+)**
+**High-Performance Native Model Context Protocol (MCP) Multiplexer & Transparent Tool Gateway in Pure Zig (v0.17.1)**
 
-`zmcp-gateway` consolidates multiple downstream Model Context Protocol (MCP) tool servers into a **single, unified virtual MCP endpoint** for AI agents (Hermes Agent, Claude Code, Cursor). Built as a pure Zig 0.17.0+ static binary, it provides **100% transparent zero-overhead routing (<2.1µs latency)** and correlates all events with **W3C OpenTelemetry distributed tracing**.
+`zmcp-gateway` provides a native Model Context Protocol (MCP) tool-routing library and stdio executable for AI agents (Hermes Agent, Claude Code, Cursor). Release **1.3.1** targets **Zig 0.17.1**. The executable currently registers only `sys__status` and `sys__ping`; library users can register in-process upstream handlers. External stdio child and HTTP upstream transports are not implemented in this executable.
 
 ---
 
 ## 7-in-1 Architecture (The Unified Zig Stack)
 
-`zmcp-gateway` integrates the complete `entropyparadox-lab` Zig 0.17.0+ stack:
+`zmcp-gateway` integrates the complete `entropyparadox-lab` Zig stack through commit-pinned URL/hash dependencies in `build.zig.zon` (no sibling checkouts):
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -60,6 +60,8 @@
 ## Installation & Usage
 
 ### 1. Build and Run
+
+Use Zig **0.17.1**. See the [Korean upgrade guide](docs/zig-0.17.1-ko.md) and [changelog](CHANGELOG.md). Dependency commits are locally verified; unpublished commit archives remain unavailable remotely until their maintainers push them. Fresh remote CI is blocked until then; a seeded local cache is not proof of remote availability.
 
 ```bash
 # Clone and build

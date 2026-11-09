@@ -6,7 +6,7 @@ Thank you for contributing to `zmcp-gateway`! To maintain high throughput, low l
 
 ## 1. Compiler Versioning & Branch Strategy
 
-* **`main` (Protected)**: Targets the unreleased Zig snapshot **`0.17.0-dev.2085+5e36170b5`**. All production releases (`vX.Y.Z`) are cut exclusively from `main`.
+* **`main` (Protected)**: Targets **Zig 0.17.1**. All production releases (`vX.Y.Z`) are cut exclusively from `main`.
 * **`zig-master`**: Tracks upstream `ziglang/zig` nightly builds.
 * **`feat/<name>` / `fix/<name>`**: Branch off `main` for stable changes.
 
@@ -30,11 +30,15 @@ Install local pre-commit hooks:
 Before opening a PR, run full local verification:
 ```bash
 # 1. Format code
-zig fmt src/ build.zig
+zig fmt src/ tests/ build.zig build.zig.zon
 
 # 2. Run unit tests
 zig build test
 
 # 3. Run benchmarks
 zig build bench
+
+# 4. Isolated, bounded MCP stdio initialize/list/call
+zig build -Doptimize=ReleaseFast
+python3 tests/stdio_smoke.py zig-out/bin/zmcp-gateway
 ```

@@ -4,42 +4,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Sibling module imports (The Complete 7-Library Zig Stack)
-    const zcli_mod = b.createModule(.{
-        .root_source_file = b.path("../zcli/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zserde_mod = b.createModule(.{
-        .root_source_file = b.path("../zserde/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zmcp_mod = b.createModule(.{
-        .root_source_file = b.path("../zmcp/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zbench_mod = b.createModule(.{
-        .root_source_file = b.path("../zbench/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zfetch_mod = b.createModule(.{
-        .root_source_file = b.path("../zfetch/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zenv_mod = b.createModule(.{
-        .root_source_file = b.path("../zenv/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zlog_mod = b.createModule(.{
-        .root_source_file = b.path("../zlog/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    // Content-addressed packages; no sibling checkout is required.
+    const options = .{ .target = target, .optimize = optimize };
+    const zcli_mod = b.dependency("zcli", options).module("zcli");
+    const zserde_mod = b.dependency("zserde", options).module("zserde");
+    const zmcp_mod = b.dependency("zmcp", options).module("zmcp");
+    const zbench_mod = b.dependency("zbench", options).module("zbench");
+    const zfetch_mod = b.dependency("zfetch", options).module("zfetch");
+    const zenv_mod = b.dependency("zenv", options).module("zenv");
+    const zlog_mod = b.dependency("zlog", options).module("zlog");
 
     // 1. Root library module
     const gateway_mod = b.addModule("zmcp-gateway", .{

@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const GatewayConfig = struct {
     name: []const u8 = "zmcp-gateway",
-    version: []const u8 = "1.1.0",
+    version: []const u8 = "1.3.1",
     port: u16 = 8999,
     timeout_ms: u32 = 15000,
     log_level: []const u8 = "info",
